@@ -1,0 +1,8 @@
+[build]
+  command = "pip install -r requirements.txt"
+  publish = "static" # Where your static assets live
+
+[[redirects]]
+  from = "/*"
+  to = "/.netlify/functions/app"
+  status = 200

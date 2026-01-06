@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SyncStream - YouTube Watch Party</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+</head>
+<body>
+  <!-- Landing Page -->
+  <div id="landing-page" class="landing-page">
+    <div class="landing-content">
+      <h1 class="title">SyncStream</h1>
+      <p class="subtitle">Watch YouTube together in perfect sync</p>
+      
+      <div class="username-section">
+        <input id="username-input" type="text" placeholder="Enter your name" maxlength="20" class="username-input">
+      </div>
+      
+      <div class="button-group">
+        <button id="create-room-btn" class="btn btn-primary">Create Room</button>
+        <button id="join-room-btn" class="btn btn-secondary">Join Room</button>
+      </div>
+      
+      <div id="join-modal" class="join-modal hidden">
+        <input id="room-code-input" type="text" placeholder="Enter 6-digit room code" maxlength="6" class="room-input">
+        <button id="join-submit-btn" class="btn btn-success">Join</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Room Page -->
+  <div id="room-page" class="room-page hidden">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <h2 class="logo">SyncStream</h2>
+        <div class="room-info">
+          <span class="label">Room:</span>
+          <span id="room-id-display" class="room-code"></span>
+        </div>
+      </div>
+      
+      <div class="header-right">
+        <div class="sync-status">
+          <div id="sync-indicator" class="sync-indicator synced"></div>
+          <span id="sync-status">Synced</span>
+        </div>
+        <div class="user-info">
+          <svg class="icon" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/>
+          </svg>
+          <span id="user-count">1</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="tab-navigation">
+      <button class="tab-btn active" data-tab="video">
+        <svg class="tab-icon" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/>
+        </svg>
+        Video
+      </button>
+      <button class="tab-btn" data-tab="chat">
+        <svg class="tab-icon" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"/>
+        </svg>
+        Chat
+        <span id="unread-badge" class="unread-badge hidden">0</span>
+      </button>
+      <button class="tab-btn" data-tab="games">
+        <svg class="tab-icon" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M11 17a1 1 0 001.447.894l4-2A1 1 0 0017 15V9.236a1 1 0 00-1.447-.894l-4 2a1 1 0 00-.553.894V17zM15.211 6.276a1 1 0 000-1.788l-4.764-2.382a1 1 0 00-.894 0L4.789 4.488a1 1 0 000 1.788l4.764 2.382a1 1 0 00.894 0l4.764-2.382zM4.447 8.342A1 1 0 003 9.236V15a1 1 0 00.553.894l4 2A1 1 0 009 17v-5.764a1 1 0 00-.553-.894l-4-2z"/>
+        </svg>
+        Games
+      </button>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container">
+      <!-- Video Tab -->
+      <div id="video-tab" class="tab-content active">
+        <div class="main-content">
+          <!-- Video Section -->
+          <div class="video-section">
+            <!-- Admin Controls -->
+            <div id="admin-controls" class="admin-controls hidden">
+              <div class="control-box">
+                <label class="control-label">YouTube URL</label>
+                <div class="input-group">
+                  <input id="youtube-url-input" type="text" placeholder="Paste YouTube URL here" class="url-input">
+                  <button id="load-video-btn" class="btn btn-load">Load Video</button>
+                  <button id="add-to-queue-btn" class="btn btn-queue">Add to Queue</button>
+                </div>
+                <div class="control-options">
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="background-play-toggle">
+                    <span>Background Play (Audio continues when tab inactive)</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Video Player -->
+            <div class="video-container">
+              <div id="player"></div>
+              <div id="player-overlay" class="player-overlay hidden"></div>
+              <div id="no-video" class="no-video">
+                <svg class="video-icon" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/>
+                </svg>
+                <p>No video loaded yet</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sidebar -->
+          <div class="sidebar">
+            <!-- Users List -->
+            <div class="sidebar-section">
+              <h3 class="sidebar-title">Participants</h3>
+              <div id="users-list" class="users-list"></div>
+            </div>
+
+            <!-- Queue -->
+            <div class="sidebar-section">
+              <h3 class="sidebar-title">Queue</h3>
+              <div id="queue-list" class="queue-list">
+                <p class="empty-message">No videos in queue</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat Tab -->
+      <div id="chat-tab" class="tab-content">
+        <div class="chat-container">
+          <div class="chat-messages" id="chat-messages">
+            <div class="chat-welcome">
+              <svg class="chat-welcome-icon" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"/>
+              </svg>
+              <p>Start chatting with your friends!</p>
+            </div>
+          </div>
+          <div class="chat-input-container">
+            <input type="text" id="chat-input" class="chat-input" placeholder="Type a message..." maxlength="500">
+            <button id="send-message-btn" class="btn-send">
+              <svg class="send-icon" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Games Tab -->
+      <div id="games-tab" class="tab-content">
+        <div class="games-container">
+          <h2 class="games-title">Choose a Game to Play</h2>
+          <p class="games-subtitle">Play games with your friends while listening to music!</p>
+          
+          <div class="games-grid">
+            <!-- Tic Tac Toe -->
+            <div class="game-card" data-game="tictactoe">
+              <div class="game-icon">❌⭕</div>
+              <h3 class="game-name">Tic Tac Toe</h3>
+              <p class="game-description">Classic 3x3 grid game</p>
+              <button class="btn-play">Play Now</button>
+            </div>
+
+            <!-- Chess -->
+            <div class="game-card" data-game="chess">
+              <div class="game-icon">♟️</div>
+              <h3 class="game-name">Chess</h3>
+              <p class="game-description">Strategic board game</p>
+              <button class="btn-play">Play Now</button>
+            </div>
+
+            <!-- Ludo -->
+            <div class="game-card" data-game="ludo">
+              <div class="game-icon">🎲</div>
+              <h3 class="game-name">Ludo</h3>
+              <p class="game-description">Classic dice game</p>
+              <button class="btn-play">Play Now</button>
+            </div>
+
+            <!-- Connect Four -->
+            <div class="game-card" data-game="connect4">
+              <div class="game-icon">🔴🟡</div>
+              <h3 class="game-name">Connect Four</h3>
+              <p class="game-description">Drop and connect 4</p>
+              <button class="btn-play">Play Now</button>
+            </div>
+
+            <!-- Checkers -->
+            <div class="game-card" data-game="checkers">
+              <div class="game-icon">⚫⚪</div>
+              <h3 class="game-name">Checkers</h3>
+              <p class="game-description">Jump and capture</p>
+              <button class="btn-play">Play Now</button>
+            </div>
+
+            <!-- Snake & Ladders -->
+            <div class="game-card" data-game="snakeladder">
+              <div class="game-icon">🐍🪜</div>
+              <h3 class="game-name">Snake & Ladders</h3>
+              <p class="game-description">Roll dice and climb</p>
+              <button class="btn-play">Play Now</button>
+            </div>
+
+            <!-- Dots and Boxes -->
+            <div class="game-card" data-game="dotsboxes">
+              <div class="game-icon">📦</div>
+              <h3 class="game-name">Dots & Boxes</h3>
+              <p class="game-description">Connect dots, make boxes</p>
+              <button class="btn-play">Play Now</button>
+            </div>
+
+            <!-- Rock Paper Scissors -->
+            <div class="game-card" data-game="rps">
+              <div class="game-icon">✊✋✌️</div>
+              <h3 class="game-name">Rock Paper Scissors</h3>
+              <p class="game-description">Quick hand game</p>
+              <button class="btn-play">Play Now</button>
+            </div>
+
+            <!-- Memory Match -->
+            <div class="game-card" data-game="memory">
+              <div class="game-icon">🃏</div>
+              <h3 class="game-name">Memory Match</h3>
+              <p class="game-description">Find matching pairs</p>
+              <button class="btn-play">Play Now</button>
+            </div>
+
+            <!-- Trivia Quiz -->
+            <div class="game-card" data-game="trivia">
+              <div class="game-icon">❓</div>
+              <h3 class="game-name">Trivia Quiz</h3>
+              <p class="game-description">Test your knowledge</p>
+              <button class="btn-play">Play Now</button>
+            </div>
+
+            <!-- Word Chain -->
+            <div class="game-card" data-game="wordchain">
+              <div class="game-icon">🔤</div>
+              <h3 class="game-name">Word Chain</h3>
+              <p class="game-description">Build word chains</p>
+              <button class="btn-play">Play Now</button>
+            </div>
+
+            <!-- Drawing Game -->
+            <div class="game-card" data-game="drawing">
+              <div class="game-icon">🎨</div>
+              <h3 class="game-name">Draw & Guess</h3>
+              <p class="game-description">Draw and guess words</p>
+              <button class="btn-play">Play Now</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Game Arena (Hidden by default) -->
+        <div id="game-arena" class="game-arena hidden">
+          <div class="game-header">
+            <h3 id="current-game-title">Game</h3>
+            <button id="back-to-games" class="btn-back">← Back to Games</button>
+          </div>
+          <div id="game-content" class="game-content">
+            <!-- Game content will be loaded here -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+  <script src="{{ url_for('static', filename='games.js') }}"></script>
+</body>
+</html>
